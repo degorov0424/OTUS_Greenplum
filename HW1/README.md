@@ -9,7 +9,7 @@ docker ps
 ```
 
 Появилась информация о контейнерах.
-
+![docker](img/1.png)
 ---
 
 ## 2. Скачал Docker image
@@ -35,7 +35,7 @@ docker images
 ```text
 vldbuk/gpdb_demo_repo:gpdb_demo
 ```
-
+![docker images](img/2.png)
 ---
 
 ## 4. Запустил контейнер
@@ -57,7 +57,7 @@ docker ps
 ```
 
 В выводе появился контейнер с `IMAGE` = `vldbuk/gpdb_demo_repo:gpdb_demo`. Скопировал его `CONTAINER ID`.
-
+![docker ps](img/3.png)
 ---
 
 ## 6. Подключение к контейнеру
@@ -67,7 +67,7 @@ docker ps
 ```bash
 docker exec -it <CONTAINER ID> bash
 ```
-
+![docker exec](img/4.png)
 ---
 
 ## 7. Переключение на пользователя gpadmin
@@ -97,3 +97,5 @@ gpstart -qa
 ```bash
 psql -d demo
 ```
+![GP](img/5.png)
+---
