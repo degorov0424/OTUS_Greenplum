@@ -1,0 +1,80 @@
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONF="$SCRIPT_DIR/install.conf"
+LOGFILE="$SCRIPT_DIR/install.log"
+
+exec > >(tee -a "$LOGFILE") 2>&1
+
+finish() {
+    local rc=$?
+    echo
+    if [ "$rc" -eq 0 ]; then
+        echo "===== install: SUCCESS ($(date '+%F %T')) rc=0 ====="
+    else
+        echo "===== install: FAILED ($(date '+%F %T')) rc=$rc ====="
+    fi
+}
+trap finish EXIT
+
+echo "===== install: START ($(date '+%F %T')) ====="
+echo "log file: $LOGFILE"
+echo
+
+if [ ! -f "$CONF" ]; then
+    echo "ERROR: нет $CONF. Запустите: bash db_dwh/setup.sh --host ... --user ... --password ..." >&2
+    exit 1
+fi
+# shellcheck disable=SC1090
+source "$CONF"
+
+for v in PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE AIRFLOW_PW METABASE_PW; do
+    val="${!v:-}"
+    if [ -z "$val" ] || [[ "$val" == __* ]]; then
+        echo "ERROR: заполните $v в $CONF" >&2
+        exit 1
+    fi
+done
+
+PSQLOPTS="-h $PGHOST -p $PGPORT -U $PGUSER"
+export PGPASSWORD AIRFLOW_PW METABASE_PW
+run(){ psql $PSQLOPTS -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$1"; }
+
+echo "target: $PGUSER @ $PGHOST:$PGPORT / $PGDATABASE"
+echo
+cd "$ROOT"
+
+echo "== 1/7 схемы =="
+run db_dwh/model/00_create_schemas.sql
+
+echo "== 2/7 sequences meta =="
+for s in db_dwh/model/meta/*_seq.sql; do run "$s"; done
+
+echo "== 3/7 таблицы stg/dds/dm/meta =="
+for d in stg dds dm meta; do
+  for f in db_dwh/model/$d/*.sql; do [ -f "$f" ] && run "$f"; done
+done
+
+echo "== 4/7 функции dm (fill_*) и rep (get_*) =="
+for f in db_dwh/func/dm/*.sql db_dwh/func/rep/*.sql; do
+  case "$f" in *_OLD.sql) continue;; esac
+  run "$f"
+done
+
+echo "== 5/7 сиды meta (batch_history, dv_mapping) =="
+for f in db_dwh/data/meta/*.sql; do run "$f"; done
+
+echo "== 6/7 роли (чистый SQL, без паролей) =="
+run db_dwh/permissions/roles.sql
+
+echo "== 7/7 гранты + пароли =="
+run db_dwh/permissions/grants.sql
+psql $PSQLOPTS -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+   -v airflow_pw="$AIRFLOW_PW" -v metabase_pw="$METABASE_PW" <<'SQL'
+ALTER ROLE airflow LOGIN PASSWORD :'airflow_pw';
+ALTER ROLE metabase LOGIN PASSWORD :'metabase_pw';
+SQL
+
+echo
+echo "===== install: DONE — $PGUSER @ $PGHOST:$PGPORT / $PGDATABASE ====="

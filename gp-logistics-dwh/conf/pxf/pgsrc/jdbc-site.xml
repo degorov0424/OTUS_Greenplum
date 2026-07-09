@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration>
+
+    <property>
+        <name>jdbc.driver</name>
+        <value>org.postgresql.Driver</value>
+    </property>
+
+    <property>
+        <name>jdbc.url</name>
+        <value>jdbc:postgresql://_PG_DATABASE_IP:_PORT/logistics</value>
+    </property>
+
+    <property>
+        <name>jdbc.user</name>
+        <value>pxf_reader</value>
+    </property>
+
+    <property>
+        <name>jdbc.password</name>
+        <value>_PXF_PASSWORD</value>
+    </property>
+
+</configuration>

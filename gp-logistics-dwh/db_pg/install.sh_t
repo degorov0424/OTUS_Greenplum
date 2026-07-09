@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# db_pg/install.sh_t — ШАБЛОН установщика PostgreSQL-источника (коммитится).
+# setup.sh копирует его в install.sh (НЕ коммитить).
+#
+# Единый скрипт: триггерная функция + таблицы (FK-порядок) + роли + гранты + пароли.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONF="$SCRIPT_DIR/install.conf"
+LOGFILE="$SCRIPT_DIR/install.log"
+
+exec > >(tee -a "$LOGFILE") 2>&1
+
+finish() {
+    local rc=$?
+    echo
+    if [ "$rc" -eq 0 ]; then
+        echo "===== install: SUCCESS ($(date '+%F %T')) rc=0 ====="
+    else
+        echo "===== install: FAILED ($(date '+%F %T')) rc=$rc ====="
+    fi
+}
+trap finish EXIT
+
+echo "===== install: START ($(date '+%F %T')) ====="
+echo "log file: $LOGFILE"
+echo
+
+if [ ! -f "$CONF" ]; then
+    echo "ERROR: нет $CONF. Запустите: bash db_pg/setup.sh --host ... --user ... --password ..." >&2
+    exit 1
+fi
+# shellcheck disable=SC1090
+source "$CONF"
+
+for v in PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE PXF_READER_PW ETL_SRC_PW; do
+    val="${!v:-}"
+    if [ -z "$val" ] || [[ "$val" == __* ]]; then
+        echo "ERROR: заполните $v в $CONF" >&2
+        exit 1
+    fi
+done
+
+PSQLOPTS="-h $PGHOST -p $PGPORT -U $PGUSER"
+export PGPASSWORD PXF_READER_PW ETL_SRC_PW
+run(){ psql $PSQLOPTS -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$1"; }
+
+echo "target: $PGUSER @ $PGHOST:$PGPORT / $PGDATABASE"
+echo
+cd "$ROOT"
+
+echo "== 1/4 таблицы public (в порядке FK) =="
+for t in customers drivers trucks trailers facilities routes loads trips \
+         delivery_events fuel_purchases maintenance_records safety_incidents; do
+  run "db_pg/model/public/$t.sql"
+done
+
+echo "== 2/4 роли (чистый SQL, без паролей) =="
+run db_pg/permissions/roles.sql
+
+echo "== 3/4 гранты =="
+run db_pg/permissions/grants.sql
+
+echo "== 4/4 пароли из env =="
+psql $PSQLOPTS -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+   -v pxf_reader_pw="$PXF_READER_PW" -v etl_src_pw="$ETL_SRC_PW" <<'SQL'
+ALTER ROLE pxf_reader LOGIN PASSWORD :'pxf_reader_pw';
+ALTER ROLE etl_src    LOGIN PASSWORD :'etl_src_pw';
+SQL
+
+echo
+echo "===== install: DONE — $PGUSER @ $PGHOST:$PGPORT / $PGDATABASE ====="

@@ -1,0 +1,51 @@
+pg_db_size:
+  query: "SELECT datname, pg_database_size(datname) / 1024.0 / 1024.0 AS size_mb FROM pg_database WHERE datistemplate = false"
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "Database name"
+    - size_mb:
+        usage: "GAUGE"
+        description: "Database size in MB"
+
+pg_db_connections:
+  query: "SELECT datname, count(*) AS connections FROM pg_stat_activity WHERE datname IS NOT NULL GROUP BY datname"
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "Database name"
+    - connections:
+        usage: "GAUGE"
+        description: "Active connections per database"
+
+pg_table_size:
+  query: |
+    SELECT n.nspname AS schemaname, c.relname,
+           round(pg_total_relation_size(c.oid) / 1024.0 / 1024.0, 1) AS size_mb
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname IN ('stg','dds','dm','meta')
+      AND c.relkind = 'r'
+      AND c.relname NOT LIKE '%\_1\_prt\_%'
+    ORDER BY size_mb DESC
+    LIMIT 10
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Schema name"
+    - relname:
+        usage: "LABEL"
+        description: "Table name (parent only, no partitions)"
+    - size_mb:
+        usage: "GAUGE"
+        description: "Total table size in MB (including indexes/toast, top 10)"
+
+gp_segment_status:
+  query: "SELECT sum(CASE WHEN status = 'u' THEN 1 ELSE 0 END) AS up, sum(CASE WHEN status != 'u' THEN 1 ELSE 0 END) AS down FROM gp_segment_configuration"
+  metrics:
+    - up:
+        usage: "GAUGE"
+        description: "Segments UP"
+    - down:
+        usage: "GAUGE"
+        description: "Segments DOWN"

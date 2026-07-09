@@ -1,0 +1,10 @@
+# db_pg/install.conf_t — ШАБЛОН конфигурации (коммитится).
+# setup.sh заполняет __PLACEHOLDERS__ и создаёт install.conf (НЕ коммитить).
+
+PGHOST=__HOST__
+PGPORT=__PORT__
+PGUSER=__USER__
+PGPASSWORD=__PASSWORD__
+PGDATABASE=__DB__
+PXF_READER_PW=__PXF_READER_PW__
+ETL_SRC_PW=__ETL_SRC_PW__

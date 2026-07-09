@@ -1,0 +1,2 @@
+# Дополнительные Python-зависимости для кастомного образа Airflow (conf/docker-compose/Dockerfile).
+Faker>=20.1.0

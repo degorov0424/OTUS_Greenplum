@@ -1,0 +1,110 @@
+#
+# !!!!! ЗАМЕНИТЬ _PG_SRC_PASSWORD  _GPADMIN_PASSWORD  _GREENPLUM_IP  _PORT !!!!!
+#
+services:
+
+  postgres-source:
+    image: postgres:16
+    container_name: postgres-source
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: logistics
+      POSTGRES_USER: logistics
+      POSTGRES_PASSWORD: _PG_SRC_PASSWORD
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_source:/var/lib/postgresql/data
+
+    networks:
+      - default
+      - logistics-net
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase
+
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      MB_DB_FILE: /metabase-data/metabase.db
+
+    volumes:
+      - metabase_data:/metabase-data
+
+    networks:
+      - logistics-net
+
+  prometheus:
+    image: prom/prometheus
+
+    container_name: prometheus
+
+    restart: unless-stopped
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+    networks:
+      - logistics-net
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0  
+
+    container_name: postgres-exporter
+
+    restart: unless-stopped
+
+    command:
+      - "--disable-default-metrics"
+      - "--extend.query-path=/etc/postgres-exporter/queries.yaml"
+
+    environment:
+      DATA_SOURCE_NAME: "postgresql://gpadmin:_GPADMIN_PASSWORD@_GREENPLUM_IP:_PORT/logistics?sslmode=disable"
+
+    volumes:
+      - ./postgres-exporter/queries.yaml:/etc/postgres-exporter/queries.yaml:ro
+
+    ports:
+      - "9187:9187"
+
+    networks:
+      - logistics-net
+
+  grafana:
+    image: grafana/grafana:latest
+
+    container_name: grafana
+
+    restart: unless-stopped
+
+    ports:
+      - "3001:3000"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+    networks:
+      - logistics-net
+
+volumes:
+
+  postgres_source:
+
+  grafana_data:
+
+  metabase_data:
+
+networks:
+
+  logistics-net:
+    external: true
